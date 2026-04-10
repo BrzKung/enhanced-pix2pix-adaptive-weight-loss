@@ -285,27 +285,6 @@ Key packages (see requirements.txt):
 - torcheval, torchmetrics
 - tqdm, pandas
 
-## Common Issues
-
-**Issue**: CUDA out of memory
-- **Solution**: Reduce `BATCH_SIZE` in config files
-
-**Issue**: Training too slow
-- **Solution**: Enable mixed precision (already enabled), or use smaller dataset
-
-**Issue**: Poor inpainting quality
-- **Solution**: Try fixed-loss or adaptive-loss variants, or run RL tuning for longer
-
-**Issue**: Models not loading
-- **Solution**: Check checkpoint paths match config settings
-
-## References
-
-- Original Pix2Pix: https://github.com/phillipi/pix2pix
-- SoftAdapt: https://github.com/dr-aheydari/SoftAdapt
-- Stable Baselines 3: https://stable-baselines3.readthedocs.io/
-- Perceptual Losses: https://arxiv.org/abs/1603.08155
-
 ## Framework
 
 ![Framework diagram](framework.png)
@@ -336,3 +315,25 @@ Image Quality Metric each entropy coefficient
 | Metric | 0.01 | 0.05 | 0 |
 |---|---|---|---|
 | - FID | 7.3619 | 6.9479 | 7.2484 |
+
+## Common Issues
+
+**Issue**: CUDA out of memory
+- **Solution**: Reduce `BATCH_SIZE` in config files
+
+**Issue**: Training too slow
+- **Solution**: Enable mixed precision (already enabled), or use smaller dataset
+
+**Issue**: Poor inpainting quality
+- **Solution**: Try fixed-loss or adaptive-loss variants, or run RL tuning for longer
+
+**Issue**: Models not loading
+- **Solution**: Check checkpoint paths match config settings
+
+## References
+
+- Original Pix2Pix: https://github.com/phillipi/pix2pix
+- SoftAdapt: https://github.com/dr-aheydari/SoftAdapt
+- Stable Baselines 3: https://stable-baselines3.readthedocs.io/
+- Perceptual Losses: https://arxiv.org/abs/1603.08155
+
