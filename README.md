@@ -226,14 +226,6 @@ python test_pix2pix_adaptive_loss.py
 python test_pix2pix_stable_baseline.py
 ```
 
-### Evaluation Metrics
-
-Each test script computes:
-- **FID Score**: Frechet Inception Distance (lower is better, target: < 10)
-- **PSNR**: Peak Signal-to-Noise Ratio (higher is better, target: > 20 dB)
-- **SSIM**: Structural Similarity Index (higher is better, target: > 0.8)
-- **LPIPS**: Learned Perceptual Image Patch Similarity (lower is better)
-
 ### Generate Test Results
 
 Results are saved to:
@@ -313,3 +305,34 @@ Key packages (see requirements.txt):
 - SoftAdapt: https://github.com/dr-aheydari/SoftAdapt
 - Stable Baselines 3: https://stable-baselines3.readthedocs.io/
 - Perceptual Losses: https://arxiv.org/abs/1603.08155
+
+## Framework
+
+![Framework diagram](framework.png)
+
+## Evaluation Metrics
+
+Image Quality Metric based on Reward
+
+| Metric | FID | LPIPS | PSNR | SSIM |
+|---|---|---|---|---|
+| - FID | 7.3619 | 0.1361 | 35.0664 | 0.9293 |
+| - LPIPS | 6.6276 | 0.0873 | 36.5796 | 0.9686 |
+| SSIM | 8.0266 | 0.0906 | 36.0046 | 0.9679 |
+| SSIM - FID | 7.0776 | 0.0937 | 36.3875 | 0.9660 |
+| - LPIPS - FID | 6.7533 | 0.0915 | 36.5630 | 0.9660 |
+| SSIM - LPIPS - FID | 7.0284 | 0.0925 | 35.4943 | 0.9654 |
+
+Image Quality Metric on baseline
+
+| Metric | FID | LPIPS | PSNR | SSIM |
+|---|---|---|---|---|
+| PPO (- FID) | 6.6276 | 0.0873 | 36.5796 | 0.9686 |
+|Fixed| 7.4059 | 0.1048 | 35.6482 | 0.9613 |
+|SoftAdapt| 7.8715 | 0.1050 | 35.9333 | 0.9601 |
+
+Image Quality Metric each entropy coefficient
+
+| Metric | 0.01 | 0.05 | 0 |
+|---|---|---|---|
+| - FID | 7.3619 | 6.9479 | 7.2484 |
