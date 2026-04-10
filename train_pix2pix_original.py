@@ -1,414 +1,57 @@
-import torch
-import albumentations as A
-from albumentations.pytorch import ToTensorV2
-
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-TRAIN_DIR = "./datasets/train"
-VAL_DIR = "./datasets/test"
-TEST_DIR = "./datasets/test"
-LEARNING_RATE = 2e-4
-BATCH_SIZE = 16
-NUM_WORKERS = 2
-IMAGE_SIZE = 512
-CHANNELS_IMG = 3
-L1_LAMBDA = 0.1
-ADAPTIVE_WEIGHT_BETA = 0.1
-USE_SOFTADAPT = True
-SOFTADAPT_ITERATIONS = 3
-SOFTADAPT_ACCURACY_ORDER = None if SOFTADAPT_ITERATIONS <= 5 else 4
-LAMBDA_GP = 10
-NUM_EPOCHS = 1000
-LOAD_MODEL = False
-SAVE_MODEL = True
-SAVE_MODEL_EPOCHS = 100
-CHECKPOINT_DIR = "./checkpoints/pix2pix_original"
-CHECKPOINT = 0
-LOAD_CHECKPOINT_GEN = f"./checkpoints/pix2pix_original/gen_{CHECKPOINT}.pth.tar"
-LOAD_CHECKPOINT_DISC = f"./checkpoints/pix2pix_original/disc_{CHECKPOINT}.pth.tar"
-LOAD_HISTORY_PATH = f"./result/pix2pix_original/history_{CHECKPOINT}.csv"
-SAVE_HISTORY_VAL_DIR = f"./result/pix2pix_original"
-
-both_transform = A.Compose(
-    [
-        A.Resize(width=512, height=512),
-    ],
-    additional_targets={"image0": "image"},
-    # [], additional_targets={"image0": "image"},
+from config_original import (
+    DEVICE,
+    TRAIN_DIR,
+    VAL_DIR,
+    TEST_DIR,
+    LEARNING_RATE,
+    BATCH_SIZE,
+    NUM_WORKERS,
+    IMAGE_SIZE,
+    CHANNELS_IMG,
+    L1_LAMBDA,
+    ADAPTIVE_WEIGHT_BETA,
+    USE_SOFTADAPT,
+    SOFTADAPT_ITERATIONS,
+    SOFTADAPT_ACCURACY_ORDER,
+    LAMBDA_GP,
+    NUM_EPOCHS,
+    LOAD_MODEL,
+    SAVE_MODEL,
+    SAVE_MODEL_EPOCHS,
+    CHECKPOINT,
+    CHECKPOINT_DIR,
+    LOAD_CHECKPOINT_GEN,
+    LOAD_CHECKPOINT_DISC,
+    LOAD_HISTORY_PATH,
+    SAVE_HISTORY_VAL_DIR,
+    both_transform,
+    transform_only_input,
+    transform_only_label,
+    transform_only_mask,
+    transform_resize,
 )
 
-transform_only_input = A.Compose(
-    [
-        # A.HorizontalFlip(p=0.5),
-        # A.ColorJitter(p=0.2),
-        A.Normalize(
-            mean=[0.5, 0.5, 0.5],
-            std=[0.5, 0.5, 0.5],
-            max_pixel_value=255.0,
-        ),
-        ToTensorV2(),
-    ]
-)
+from utils import save_checkpoint, load_checkpoint, load_lambda
+from dataset import MapDataset
+from models import Discriminator, Generator, test_disc, test_gen
+from loss import PerceptualAndStyleLoss
 
-transform_only_label = A.Compose(
-    [
-        A.Normalize(
-            mean=[0.5, 0.5, 0.5],
-            std=[0.5, 0.5, 0.5],
-            max_pixel_value=255.0,
-        ),
-        ToTensorV2(),
-    ]
-)
-
-transform_only_mask = A.Compose(
-    [
-        ToTensorV2(),
-    ]
-)
-
-transform_resize = A.Resize(height=512, width=512)
-
-# Utils
+# Training dependencies
 import torch
-
-
-def save_checkpoint(model, optimizer, filepath="my_checkpoint.pth.tar"):
-    print(f"=> Saving checkpoint : {filepath}")
-    checkpoint = {
-        "state_dict": model.state_dict(),
-        "optimizer": optimizer.state_dict(),
-    }
-    torch.save(checkpoint, filepath)
-
-
-def load_checkpoint(checkpoint_file, model, optimizer, lr):
-    print(f"=> Loading checkpoint : {checkpoint_file}")
-    checkpoint = torch.load(checkpoint_file, map_location=DEVICE)
-    model.load_state_dict(checkpoint["state_dict"])
-    optimizer.load_state_dict(checkpoint["optimizer"])
-
-    # If we don't do this then it will just have learning rate of old checkpoint
-    # and it will lead to many hours of debugging \:
-    for param_group in optimizer.param_groups:
-        param_group["lr"] = lr
-
-
-def load_lambda():
-    print("=> Loading lambda")
-    global L1_LAMBDA
-
-    lambda_df = pd.read_csv(LOAD_HISTORY_PATH)
-    lasted_lamda = lambda_df.iloc[-1]
-
-    L1_LAMBDA = lasted_lamda["l1_lambda"]
-
-    print("l1 lambda: ", L1_LAMBDA)
-
-
-# Datasets
-import numpy as np
-
-# import config
-import os
-from PIL import Image
-from torch.utils.data import Dataset, DataLoader
-from torchvision.utils import save_image
-
-
-class MapDataset(Dataset):
-    def __init__(self, root_dir, masked=False):
-        self.input_dir = root_dir + "/input"
-        self.label_dir = root_dir + "/label"
-        self.mask_dir = root_dir + "/mask"
-
-        self.list_input_files = os.listdir(self.input_dir)
-        self.list_label_files = os.listdir(self.label_dir)
-        self.list_mask_files = os.listdir(self.mask_dir)
-
-        self.list_input_files.sort()
-        self.list_label_files.sort()
-        self.list_mask_files.sort()
-
-        self.masked = masked
-
-    def __len__(self):
-        return len(self.list_input_files)
-
-    def __getitem__(self, index):
-        input_img_file = self.list_input_files[index]
-        input_img_path = os.path.join(self.input_dir, input_img_file)
-
-        label_img_file = self.list_label_files[index]
-        label_img_path = os.path.join(self.label_dir, label_img_file)
-
-        mask_img_file = self.list_mask_files[index]
-        mask_img_path = os.path.join(self.mask_dir, mask_img_file)
-
-        input_image = np.array(Image.open(input_img_path).convert("RGB"))
-        target_image = np.array(Image.open(label_img_path).convert("RGB"))
-        mask_image = np.array(Image.open(mask_img_path).convert("RGB"))
-        mask_image = (mask_image - mask_image.min()) / (
-            mask_image.max() - mask_image.min()
-        )
-
-        input_image = input_image * (1.0 - mask_image) if self.masked else input_image
-        # input_image = mask_image | input_image if self.masked else input_image
-
-        mask_image_resized = transform_resize(image=mask_image)
-        mask_image = mask_image_resized["image"]
-
-        augmentations = both_transform(image=input_image, image0=target_image)
-        input_image = augmentations["image"]
-        target_image = augmentations["image0"]
-
-        input_image = transform_only_input(image=input_image)["image"]
-        target_image = transform_only_label(image=target_image)["image"]
-
-        return input_image, target_image, mask_image
-
-
-# if __name__ == "__main__":
-#     dataset = MapDataset(TRAIN_DIR)
-#     loader = DataLoader(dataset, batch_size=5)
-#     for x, y in loader:
-#         print(x.shape)
-#         save_image(x, "x.png")
-#         save_image(y, "y.png")
-#         import sys
-
-#         sys.exit()
-
-# Discriminator
-import torch
-import torch.nn as nn
-
-
-# PatchGANs
-class CNNBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, stride):
-        super(CNNBlock, self).__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(
-                in_channels,
-                out_channels,
-                4,
-                stride,
-                1,
-                bias=False,
-                padding_mode="reflect",
-            ),
-            nn.InstanceNorm2d(out_channels, affine=True),
-            nn.LeakyReLU(0.2),
-        )
-
-    def forward(self, x):
-        return self.conv(x)
-
-
-class Discriminator(nn.Module):
-    def __init__(self, in_channels=3, features=[64, 128, 256, 512, 512]):
-        super().__init__()
-        self.initial = nn.Sequential(
-            nn.Conv2d(
-                in_channels * 2,  # concat input and label
-                features[0],
-                kernel_size=4,
-                stride=2,
-                padding=1,
-                padding_mode="reflect",
-            ),
-            nn.LeakyReLU(0.2),
-        )
-
-        layers = []
-        in_channels = features[0]
-
-        # Apply stride=2 for the first 4 layers, then stride=1
-        for idx, feature in enumerate(features[1:]):
-            stride = 1 if idx == len(features[1:]) - 1 else 2
-            layers.append(CNNBlock(in_channels, feature, stride))
-            in_channels = feature
-
-        layers.append(
-            nn.Conv2d(
-                in_channels,
-                1,
-                kernel_size=4,
-                stride=1,
-                padding=1,
-                padding_mode="reflect",
-            ),
-        )
-
-        self.model = nn.Sequential(*layers)
-
-    def forward(self, x, y):
-        x = torch.cat([x, y], dim=1)
-        x = self.initial(x)
-        x = self.model(x)
-        return x
-
-
-def test_disc():
-    x = torch.randn((5, 3, 512, 512))  # Input 512x512
-    y = torch.randn((5, 3, 512, 512))
-    model = Discriminator(in_channels=3)
-    preds = model(x, y)
-    print(preds.shape)  # Should print: torch.Size([5, 1, 30, 30])
-
-
-# if __name__ == "__main__":
-#     test()
-
-# Generator
-import torch
-import torch.nn as nn
-
-
-# U-Net
-class Block(nn.Module):
-    def __init__(
-        self, in_channels, out_channels, down=True, act="relu", use_dropout=False
-    ):
-        super(Block, self).__init__()
-        self.conv = nn.Sequential(
-            (
-                nn.Conv2d(
-                    in_channels,
-                    out_channels,
-                    4,
-                    2,
-                    1,
-                    bias=False,
-                    padding_mode="reflect",
-                )
-                if down
-                else nn.ConvTranspose2d(in_channels, out_channels, 4, 2, 1, bias=False)
-            ),
-            # nn.BatchNorm2d(out_channels),
-            nn.InstanceNorm2d(out_channels, affine=True),
-            nn.ReLU() if act == "relu" else nn.LeakyReLU(0.2),
-        )
-
-        self.use_dropout = use_dropout
-        self.dropout = nn.Dropout(0.5)
-        self.down = down
-
-    def forward(self, x):
-        x = self.conv(x)
-        return self.dropout(x) if self.use_dropout else x
-
-
-class Generator(nn.Module):
-    def __init__(self, in_channels=3, features=64):
-        super().__init__()
-        self.initial_down = nn.Sequential(
-            nn.Conv2d(in_channels, features, 4, 2, 1, padding_mode="reflect"),
-            nn.LeakyReLU(0.2),
-        )
-        self.down1 = Block(
-            features, features * 2, down=True, act="leaky", use_dropout=False
-        )
-        self.down2 = Block(
-            features * 2, features * 4, down=True, act="leaky", use_dropout=False
-        )
-        self.down3 = Block(
-            features * 4, features * 8, down=True, act="leaky", use_dropout=False
-        )
-        self.down4 = Block(
-            features * 8, features * 8, down=True, act="leaky", use_dropout=False
-        )
-        self.down5 = Block(
-            features * 8, features * 8, down=True, act="leaky", use_dropout=False
-        )
-        self.down6 = Block(
-            features * 8, features * 8, down=True, act="leaky", use_dropout=False
-        )
-        self.bottleneck = nn.Sequential(
-            nn.Conv2d(features * 8, features * 8, 4, 2, 1), nn.ReLU()
-        )
-
-        self.up1 = Block(
-            features * 8, features * 8, down=False, act="relu", use_dropout=True
-        )
-        self.up2 = Block(
-            features * 8 * 2, features * 8, down=False, act="relu", use_dropout=True
-        )
-        self.up3 = Block(
-            features * 8 * 2, features * 8, down=False, act="relu", use_dropout=True
-        )
-        self.up4 = Block(
-            features * 8 * 2, features * 8, down=False, act="relu", use_dropout=False
-        )
-        self.up5 = Block(
-            features * 8 * 2, features * 4, down=False, act="relu", use_dropout=False
-        )
-        self.up6 = Block(
-            features * 4 * 2, features * 2, down=False, act="relu", use_dropout=False
-        )
-        self.up7 = Block(
-            features * 2 * 2, features, down=False, act="relu", use_dropout=False
-        )
-        self.final_up = nn.Sequential(
-            nn.ConvTranspose2d(
-                features * 2, in_channels, kernel_size=4, stride=2, padding=1
-            ),
-            nn.Tanh(),
-        )
-
-    def forward(self, x):
-        d1 = self.initial_down(x)
-        d2 = self.down1(d1)
-        d3 = self.down2(d2)
-        d4 = self.down3(d3)
-        d5 = self.down4(d4)
-        d6 = self.down5(d5)
-        d7 = self.down6(d6)
-        bottleneck = self.bottleneck(d7)
-        up1 = self.up1(bottleneck)
-        up2 = self.up2(torch.cat([up1, d7], 1))
-        up3 = self.up3(torch.cat([up2, d6], 1))
-        up4 = self.up4(torch.cat([up3, d5], 1))
-        up5 = self.up5(torch.cat([up4, d4], 1))
-        up6 = self.up6(torch.cat([up5, d3], 1))
-        up7 = self.up7(torch.cat([up6, d2], 1))
-        return self.final_up(torch.cat([up7, d1], 1))
-
-
-def test_gen():
-    x = torch.randn((1, 3, 512, 512))
-    model = Generator(in_channels=3, features=64)
-    preds = model(x)
-    print(preds.shape)
-
-
-# if __name__ == "__main__":
-#     test()
-
-# Perceptual anb Style Loss
-import torch
-import torch.nn as nn
-from torchvision import models, transforms
-
-
-# Train
-import torch
-import pandas as pd
-
-# from utils import save_checkpoint, load_checkpoint, save_some_examples
 import torch.nn as nn
 import torch.optim as optim
-
-# import config
-# from dataset import MapDataset
-# from generator_model import Generator
-# from discriminator_model import Discriminator
+import numpy as np
+import pandas as pd
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from torchvision.utils import save_image
 from softadapt import SoftAdapt, NormalizedSoftAdapt, LossWeightedSoftAdapt
 from torcheval.metrics import FrechetInceptionDistance
 import torch.nn.functional as F
+from torchmetrics.image import StructuralSimilarityIndexMeasure
+import lpips
+import torchvision.transforms as transforms
+
 # torch.backends.cudnn.benchmark = True
 
 
