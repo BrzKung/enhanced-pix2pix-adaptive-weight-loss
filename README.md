@@ -316,6 +316,9 @@ Image Quality Metric each entropy coefficient
 |---|---|---|---|
 | - FID | 7.3619 | 6.9479 | 7.2484 |
 
+## Model Result
+- https://huggingface.co/warachat/enhanced-pix2pix-adaptive-weight-loss
+
 ## Common Issues
 
 **Issue**: CUDA out of memory
