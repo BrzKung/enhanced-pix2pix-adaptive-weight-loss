@@ -1,0 +1,12 @@
+torch
+albumentations
+pillow
+torchvision
+gymnasium
+pandas
+tqdm
+torcheval
+stable_baselines3
+tensorboard
+torchmetrics
+lpips
