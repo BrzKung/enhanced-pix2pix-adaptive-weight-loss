@@ -287,10 +287,28 @@ Key packages (see requirements.txt):
 
 ## Framework
 
-![Framework diagram](framework.png)
+![Framework diagram](./static/framework.png)
 
-## Model Result
+## Result
+
+### Model
 - https://huggingface.co/warachat/enhanced-pix2pix-adaptive-weight-loss
+
+### Image
+![Framework diagram](./static/image.png)
+
+### Animation
+- Fixed
+
+![Framework diagram](./static/fixed.gif)
+
+- SoftAdapt
+
+![Framework diagram](./static/softAdapt.gif)
+
+- PPO
+
+![Framework diagram](./static/ppo.gif)
 
 ## Common Issues
 
@@ -298,10 +316,7 @@ Key packages (see requirements.txt):
 - **Solution**: Reduce `BATCH_SIZE` in config files
 
 **Issue**: Training too slow
-- **Solution**: Enable mixed precision (already enabled), or use smaller dataset
-
-**Issue**: Poor inpainting quality
-- **Solution**: Try fixed-loss or adaptive-loss variants, or run RL tuning for longer
+- **Solution**: Enable mixed precision (already enabled), use smaller image size, or use smaller dataset
 
 **Issue**: Models not loading
 - **Solution**: Check checkpoint paths match config settings
