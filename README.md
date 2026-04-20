@@ -297,6 +297,19 @@ Key packages (see requirements.txt):
 ### Image
 ![Framework diagram](./static/image.png)
 
+### Animation
+- Fixed
+
+![Framework diagram](./static/fixed.gif)
+
+- SoftAdapt
+
+![Framework diagram](./static/softAdapt.gif)
+
+- PPO
+
+![Framework diagram](./static/ppo.gif)
+
 ## Common Issues
 
 **Issue**: CUDA out of memory
